@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>360 Degree Image Viewer</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css">
+    <script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+        }
+        #panorama {
+            width: 100%;
+            height: 100vh;
+        }
+        #controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .direction-hotspot {
+            font-size: 24px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            line-height: 50px;
+            color: black;
+            cursor: pointer;
+        }
+        .direction-hotspot:hover {
+            background: rgba(255, 255, 255, 1);
+        }
+    </style>
+</head>
+<body>
+    <div id="panorama"></div>
+    <div id="controls">
+        <button id="zoom-in">Zoom In</button>
+        <button id="zoom-out">Zoom Out</button>
+        <button id="reset">Reset View</button>
+        <button id="fullscreen">Fullscreen</button>
+        <button id="add-marker">Add Annotation</button>
+    </div>
+    <script>
+        var viewer = pannellum.viewer('panorama', {
+            "default": {
+                "firstScene": "scene1"
+            },
+            "scenes": {
+                "scene1": {
+                    "title": "Scene 1",
+                    "type": "equirectangular",
+                    "panorama": "/1.jpg",
+                    "hotSpots": [
+                        {
+                            "pitch": 0,
+                            "yaw": 0,
+                            "type": "scene",
+                            "text": "→",
+                            "sceneId": "scene2",
+                            "cssClass": "direction-hotspot"
+                        }
+                    ]
+                },
+                "scene2": {
+                    "title": "Scene 2",
+                    "type": "equirectangular",
+                    "panorama": "/2.jpg",
+                    "hotSpots": [
+                        {
+                            "pitch": 0,
+                            "yaw": 180,
+                            "type": "scene",
+                            "text": "←",
+                            "sceneId": "scene1",
+                            "cssClass": "direction-hotspot"
+                        },
+                        {
+                            "pitch": 0,
+                            "yaw": 0,
+                            "type": "scene",
+                            "text": "→",
+                            "sceneId": "scene3",
+                            "cssClass": "direction-hotspot"
+                        }
+                    ]
+                },
+                "scene3": {
+                    "title": "Scene 3",
+                    "type": "equirectangular",
+                    "panorama": "/3.jpg",
+                    "hotSpots": [
+                        {
+                            "pitch": 0,
+                            "yaw": 180,
+                            "type": "scene",
+                            "text": "←",
+                            "sceneId": "scene2",
+                            "cssClass": "direction-hotspot"
+                        },
+                        {
+                            "pitch": 0,
+                            "yaw": 0,
+                            "type": "scene",
+                            "text": "→",
+                            "sceneId": "scene4",
+                            "cssClass": "direction-hotspot"
+                        }
+                    ]
+                },
+                "scene4": {
+                    "title": "Scene 4",
+                    "type": "equirectangular",
+                    "panorama": "/4.jpg",
+                    "hotSpots": [
+                        {
+                            "pitch": 0,
+                            "yaw": 180,
+                            "type": "scene",
+                            "text": "←",
+                            "sceneId": "scene3",
+                            "cssClass": "direction-hotspot"
+                        },
+                        {
+                            "pitch": 0,
+                            "yaw": 0,
+                            "type": "scene",
+                            "text": "→",
+                            "sceneId": "scene5",
+                            "cssClass": "direction-hotspot"
+                        }
+                    ]
+                },
+                "scene5": {
+                    "title": "Scene 5",
+                    "type": "equirectangular",
+                    "panorama": "/5.jpg",
+                    "hotSpots": [
+                        {
+                            "pitch": 0,
+                            "yaw": 180,
+                            "type": "scene",
+                            "text": "←",
+                            "sceneId": "scene4",
+                            "cssClass": "direction-hotspot"
+                        }
+                    ]
+                }
+            }
+        });
+
+        document.getElementById('zoom-in').addEventListener('click', function() {
+            var currentHfov = viewer.getHfov();
+            viewer.setHfov(Math.max(50, currentHfov - 10));
+        });
+
+        document.getElementById('zoom-out').addEventListener('click', function() {
+            var currentHfov = viewer.getHfov();
+            viewer.setHfov(Math.min(120, currentHfov + 10));
+        });
+
+        document.getElementById('reset').addEventListener('click', function() {
+            viewer.lookAt(0, 0, 100);
+        });
+
+        document.getElementById('fullscreen').addEventListener('click', function() {
+            viewer.toggleFullscreen();
+        });
+
+        // Register service worker for caching
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(function(registration) {
+                    console.log('Service Worker registered with scope:', registration.scope);
+                })
+                .catch(function(error) {
+                    console.log('Service Worker registration failed:', error);
+                });
+        }
+        function preloadImage(src) {
+            var img = new Image();
+            img.src = src;
+        }
+
+        viewer.on('scenechange', function(sceneId) {
+            var sceneNumber = parseInt(sceneId.replace('scene', ''));
+            // Preload next and previous scenes
+            if (sceneNumber < 5) {
+                preloadImage('/' + (sceneNumber + 1) + '.jpg');
+            }
+            if (sceneNumber > 1) {
+                preloadImage('/' + (sceneNumber - 1) + '.jpg');
+            }
+        });
+
+        // Preload scene 2 on load
+        preloadImage('/2.jpg');
+        document.getElementById('add-marker').addEventListener('click', function() {
+            var text = prompt("Enter text for the annotation:");
+            if (text) {
+                var pitch = viewer.getPitch();
+                var yaw = viewer.getYaw();
+                var id = 'marker-' + markerCount++;
+                viewer.addHotSpot({
+                    "pitch": pitch,
+                    "yaw": yaw,
+                    "type": "info",
+                    "text": text,
+                    "id": id
+                });
+            }
+        });
+    </script>
+</body>
+</html>

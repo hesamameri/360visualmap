@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>360 Visual Map - Lifjell Art Museum</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; }
+        #map { height: 100vh; }
+        .poi-popup { text-align: center; }
+        .poi-popup button { margin-top: 10px; padding: 10px; background: #007bff; color: white; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        var map = L.map('map').setView([59.465, 9.0372], 17); // Lifjell coordinates
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        var pois = JSON.parse('{{ pois|tojson|safe }}');
+        pois.forEach(function(poi) {
+            var marker = L.marker([poi.lat, poi.lng]).addTo(map);
+            var popupContent = '<div class="poi-popup"><h3>' + poi.name + '</h3>';
+            if (poi.type === '360') {
+                popupContent += '<button onclick="window.location.href=\'/tour/' + poi.scene_id + '\'">Enter 360 Tour</button>';
+            }
+            popupContent += '</div>';
+            marker.bindPopup(popupContent);
+        });
+    </script>
+</body>
+</html>

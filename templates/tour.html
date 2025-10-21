@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>360 Tour - {{ scene_id }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/marzipano@0.10.2/dist/marzipano.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; }
+        #panorama { width: 100%; height: 100vh; }
+        .poster { position: absolute; z-index: 10; padding: 10px; border-radius: 8px; }
+        .back-button { position: absolute; top: 20px; left: 20px; z-index: 20; padding: 10px; background: rgba(0,0,0,0.7); color: white; border: none; cursor: pointer; }
+        /* Modern modal styling */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 10000; }
+        .modal { width: 90%; max-width: 520px; background: #0b1220; color: #e5e7eb; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.35); padding: 18px; }
+        .modal h3 { margin: 0 0 12px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; }
+        .form-row { display: flex; gap: 12px; }
+        .form-col { flex: 1; }
+        .modal label { display: block; font-size: 12px; color: #9ca3af; margin-bottom: 6px; }
+        .modal input[type="text"], .modal input[type="url"], .modal textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: #0f172a; color: #e5e7eb; outline: none; }
+        .modal textarea { min-height: 80px; resize: vertical; }
+        .modal input[type="color"] { width: 48px; height: 38px; padding: 0; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: #0f172a; }
+        .modal input[type="range"] { width: 100%; }
+        .modal small { color: #9ca3af; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+        .btn { padding: 10px 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .btn-primary { background: linear-gradient(135deg, #2563eb, #22c55e); color: white; }
+        .btn-secondary { background: #1f2937; color: #e5e7eb; border: 1px solid rgba(255,255,255,0.1); }
+        /* Nav hotspot styling */
+        .nav-spot { position: absolute; display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 9999px; background: rgba(17,25,40,0.65); color: #e5e7eb; border: 1px solid rgba(255,255,255,0.18); box-shadow: 0 8px 24px rgba(0,0,0,0.35); font-size: 12px; font-weight: 700; cursor: pointer; }
+        .nav-spot .dot { width: 14px; height: 14px; border-radius: 50%; }
+        .nav-spot .label { white-space: nowrap; }
+        .nav-spot .admin-tools { position: absolute; top: -10px; right: -10px; display: flex; gap: 6px; background: rgba(0,0,0,0.6); padding: 4px; border-radius: 8px; }
+        .nav-spot .admin-tools button { border: none; border-radius: 6px; padding: 4px 8px; cursor: pointer; color: white; }
+        .nav-spot .admin-tools .delete { background: #ef4444; }
+    </style>
+</head>
+<body>
+    <button class="back-button" onclick="window.location.href='/map'">Back to Map</button>
+    <div id="panorama"></div>
+    <!-- Poster Create/Edit Modal -->
+    <div id="posterModal" class="modal-overlay">
+      <div class="modal">
+        <h3 id="pm_title">Add Poster</h3>
+        <form id="pm_form">
+          <div class="form-row">
+            <div class="form-col">
+              <label for="pm_text">Text</label>
+              <textarea id="pm_text" placeholder="Write poster text..."></textarea>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-col">
+              <label for="pm_image">Image URL</label>
+              <input type="url" id="pm_image" placeholder="https://..." />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-col">
+              <label for="pm_color">Background color</label>
+              <input type="color" id="pm_color" value="#ffffff" />
+            </div>
+            <div class="form-col">
+              <label for="pm_font">Font size (px)</label>
+              <input type="number" id="pm_font" min="8" max="48" step="1" value="14" />
+            </div>
+            <div class="form-col">
+              <label for="pm_scale">Scale <small id="pm_scale_val">1.0</small></label>
+              <input type="range" id="pm_scale" min="0.2" max="3" step="0.1" value="1.0" />
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" id="pm_cancel" class="btn btn-secondary">Cancel</button>
+            <button type="submit" id="pm_save" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Navigation Create Modal -->
+    <div id="navModal" class="modal-overlay">
+      <div class="modal">
+        <h3 id="nm_title">Add Navigation</h3>
+        <form id="nm_form">
+          <div class="form-row">
+            <div class="form-col">
+              <label for="nm_target">Target scene</label>
+              <select id="nm_target" style="width:100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: #0f172a; color: #e5e7eb;"></select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-col">
+              <label for="nm_label">Label</label>
+              <input type="text" id="nm_label" placeholder="e.g., Go to Gallery" />
+            </div>
+            <div class="form-col">
+              <label for="nm_color">Accent color</label>
+              <input type="color" id="nm_color" value="#22c55e" />
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" id="nm_cancel" class="btn btn-secondary">Cancel</button>
+            <button type="submit" id="nm_save" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <script>
+        function preloadImage(src) {
+            var img = new Image();
+            img.src = src;
+        }
+
+        // Marzipano viewer setup (single equirectangular image)
+        var panoEl = document.getElementById('panorama');
+        var viewer = new Marzipano.Viewer(panoEl, { controls: { mouseViewMode: 'drag' } });
+        var sceneNum = "{{ scene_id.replace('scene', '') }}";
+        var source = Marzipano.ImageUrlSource.fromString('/' + sceneNum + '.jpg');
+        var geometry = new Marzipano.EquirectGeometry([{ width: 4096 }]);
+        var limiter = Marzipano.RectilinearView.limit.traditional(4096, 120 * Math.PI / 180);
+        var view = new Marzipano.RectilinearView({ yaw: 0, pitch: 0, fov: 110 * Math.PI / 180 }, limiter);
+        var scene = viewer.createScene({ source: source, geometry: geometry, view: view, pinFirstLevel: true });
+        scene.switchTo({ transitionDuration: 0 });
+
+        function deg2rad(d) { return d * Math.PI / 180; }
+        function rad2deg(r) { return r * 180 / Math.PI; }
+
+        var posters = JSON.parse('{{ posters|tojson|safe }}');
+        var navs = JSON.parse('{{ navs|tojson|safe }}');
+        var scenes = JSON.parse('{{ scenes|tojson|safe }}');
+        var isAdmin = JSON.parse('{{ is_admin|tojson|safe }}');
+        var posterState = {}; // id -> {pitch,yaw,scale,div}
+        var navState = {}; // id -> {yawRad,pitchRad,wrapper,hotspot}
+        // Modal state
+        var pm = {
+          el: document.getElementById('posterModal'),
+          form: document.getElementById('pm_form'),
+          title: document.getElementById('pm_title'),
+          text: document.getElementById('pm_text'),
+          image: document.getElementById('pm_image'),
+          color: document.getElementById('pm_color'),
+          font: document.getElementById('pm_font'),
+          scale: document.getElementById('pm_scale'),
+          scaleVal: document.getElementById('pm_scale_val'),
+          btnCancel: document.getElementById('pm_cancel')
+        };
+        var pmMode = null; // 'create' | 'edit'
+        var pmPosterId = null; // for edit
+        var pmCoords = null; // { pitchDeg, yawDeg } for create
+
+        function openPosterModal(mode, data) {
+          pmMode = mode;
+          if (mode === 'create') {
+            pm.title.textContent = 'Add Poster';
+            pm.text.value = data.text || '';
+            pm.image.value = data.image_url || '';
+            pm.color.value = data.color || '#ffffff';
+            pm.font.value = (data.font_size != null ? data.font_size : 14);
+            pm.scale.value = (data.scale != null ? data.scale : 1.0);
+            pm.scaleVal.textContent = parseFloat(pm.scale.value).toFixed(1);
+            pmCoords = { pitchDeg: data.pitchDeg, yawDeg: data.yawDeg };
+            pmPosterId = null;
+          } else {
+            pm.title.textContent = 'Edit Poster';
+            pm.text.value = data.text || '';
+            pm.image.value = data.image_url || '';
+            pm.color.value = data.color || '#ffffff';
+            pm.font.value = (data.font_size != null ? data.font_size : 14);
+            pm.scale.value = (data.scale != null ? data.scale : 1.0);
+            pm.scaleVal.textContent = parseFloat(pm.scale.value).toFixed(1);
+            pmCoords = null;
+            pmPosterId = data.id;
+          }
+          pm.el.style.display = 'flex';
+        }
+        function closePosterModal() {
+          pm.el.style.display = 'none';
+          pmMode = null; pmPosterId = null; pmCoords = null;
+        }
+        pm.btnCancel.addEventListener('click', function(){ closePosterModal(); });
+        pm.scale.addEventListener('input', function(){ pm.scaleVal.textContent = parseFloat(pm.scale.value).toFixed(1); });
+        pm.form.addEventListener('submit', function(e){
+          e.preventDefault();
+          var payload = new URLSearchParams();
+          var text = pm.text.value;
+          var image_url = pm.image.value;
+          var color = pm.color.value || '#ffffff';
+          var font_size = parseFloat(pm.font.value || '14');
+          var scale = parseFloat(pm.scale.value || '1.0');
+          if (pmMode === 'create') {
+            payload.set('scene_id', '{{ scene_id }}');
+            payload.set('pitch', pmCoords.pitchDeg);
+            payload.set('yaw', pmCoords.yawDeg);
+            payload.set('text', text);
+            payload.set('image_url', image_url);
+            payload.set('color', color);
+            payload.set('font_size', font_size);
+            payload.set('scale', scale);
+            fetch('/add_poster', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: payload })
+              .then(r => { if (r.ok) location.reload(); else alert('Failed to add poster'); });
+          } else if (pmMode === 'edit') {
+            payload.set('id', pmPosterId);
+            payload.set('text', text);
+            payload.set('image_url', image_url);
+            payload.set('color', color);
+            payload.set('font_size', font_size);
+            payload.set('scale', scale);
+            fetch('/update_poster', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: payload })
+              .then(r => { if (r.ok) location.reload(); else alert('Failed to update poster'); });
+          }
+        });
+
+        // Nav modal state (guarded)
+        var nmEl = document.getElementById('navModal');
+        var nmFormEl = document.getElementById('nm_form');
+        var nmTitleEl = document.getElementById('nm_title');
+        var nmTargetEl = document.getElementById('nm_target');
+        var nmLabelEl = document.getElementById('nm_label');
+        var nmColorEl = document.getElementById('nm_color');
+        var nmCancelEl = document.getElementById('nm_cancel');
+        var nmCoords = null;
+
+        function openNavModal(data) {
+          if (!nmEl || !nmFormEl) return;
+          nmTitleEl.textContent = 'Add Navigation';
+          nmLabelEl.value = data.label || '';
+          nmColorEl.value = data.color || '#22c55e';
+          nmTargetEl.innerHTML = '';
+          scenes.forEach(function(sc){
+            var opt = document.createElement('option');
+            opt.value = sc; opt.textContent = sc;
+            nmTargetEl.appendChild(opt);
+          });
+          nmTargetEl.value = data.target || scenes[0] || '';
+          nmCoords = { pitchDeg: data.pitchDeg, yawDeg: data.yawDeg };
+          nmEl.style.display = 'flex';
+        }
+        function closeNavModal(){ if (!nmEl) return; nmEl.style.display = 'none'; nmCoords = null; }
+        if (nmCancelEl) nmCancelEl.addEventListener('click', function(){ closeNavModal(); });
+        if (nmFormEl) nmFormEl.addEventListener('submit', function(e){
+          e.preventDefault();
+          var payload = new URLSearchParams();
+          payload.set('scene_id', '{{ scene_id }}');
+          payload.set('target_scene_id', nmTargetEl.value);
+          payload.set('pitch', nmCoords.pitchDeg);
+          payload.set('yaw', nmCoords.yawDeg);
+          payload.set('label', nmLabelEl.value);
+          payload.set('color', nmColorEl.value || '#22c55e');
+          fetch('/add_nav', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: payload })
+            .then(r => { if (r.ok) location.reload(); else alert('Failed to add navigation'); });
+        });
+
+        function makePosterContent(poster) {
+            var wrapper = document.createElement('div');
+            wrapper.className = 'poster';
+            wrapper.style.background = 'transparent';
+            wrapper.style.borderRadius = '8px';
+            wrapper.style.boxShadow = '0 8px 32px rgba(0,0,0,0.35)';
+            wrapper.style.padding = '12px';
+            wrapper.style.overflow = 'visible';
+            wrapper.style.position = 'relative';
+            wrapper.style.touchAction = 'none'; // better touch drag on mobile
+            // Glass background layer (no blur on text)
+            var bg = document.createElement('div');
+            bg.className = 'poster-bg';
+            bg.style.position = 'absolute';
+            bg.style.left = '0';
+            bg.style.top = '0';
+            bg.style.right = '0';
+            bg.style.bottom = '0';
+            bg.style.background = 'rgba(17, 25, 40, 0.55)';
+            bg.style.backdropFilter = 'blur(8px) saturate(160%)';
+            bg.style.webkitBackdropFilter = 'blur(8px) saturate(160%)';
+            bg.style.border = '1px solid rgba(255,255,255,0.18)';
+            bg.style.borderLeft = '4px solid ' + (poster.color || 'rgba(255,255,255,0.35)');
+            bg.style.borderRadius = '8px';
+            bg.style.pointerEvents = 'none';
+            bg.style.zIndex = '0';
+            wrapper.appendChild(bg);
+            // Inner content (no blur)
+            var content = document.createElement('div');
+            content.className = 'poster-content';
+            content.style.position = 'relative';
+            content.style.zIndex = '1';
+            content.style.color = '#e5e7eb';
+            content.style.marginBottom = '8px';
+            if (poster.image_url) {
+                content.innerHTML += '<img src="' + poster.image_url + '" style="max-width:100%; border-radius:6px;"><br>';
+            }
+            if (poster.text) {
+                content.innerHTML += '<p style="margin: 6px 0 0 0;">' + poster.text + '</p>';
+            }
+            wrapper.appendChild(content);
+            if (isAdmin) {
+                // Resize handle (not scaled)
+                var handle = document.createElement('div');
+                handle.style.width = '22px';
+                handle.style.height = '22px';
+                handle.style.position = 'absolute';
+                handle.style.right = '-8px';
+                handle.style.bottom = '-8px';
+                handle.style.background = '#666';
+                handle.style.border = '2px solid white';
+                handle.style.borderRadius = '50%';
+                handle.style.cursor = 'nwse-resize';
+                handle.title = 'Resize';
+                wrapper.appendChild(handle);
+                wrapper.__resizeHandle = handle;
+
+                // Toolbar (not scaled)
+                var toolbar = document.createElement('div');
+                toolbar.style.position = 'absolute';
+                toolbar.style.top = '4px';
+                toolbar.style.right = '4px';
+                toolbar.style.display = 'flex';
+                toolbar.style.gap = '6px';
+                toolbar.style.background = 'rgba(0,0,0,0.6)';
+                toolbar.style.padding = '6px';
+                toolbar.style.borderRadius = '8px';
+                toolbar.style.backdropFilter = 'blur(4px)';
+                toolbar.style.zIndex = '1000';
+
+                var editBtn = document.createElement('button');
+                editBtn.textContent = 'Edit';
+                editBtn.style.background = '#22c55e';
+                editBtn.style.color = 'white';
+                editBtn.style.border = 'none';
+                editBtn.style.padding = '4px 10px';
+                editBtn.style.borderRadius = '6px';
+                editBtn.style.cursor = 'pointer';
+                editBtn.onclick = function() {
+                    openPosterModal('edit', { id: poster.id, text: poster.text, image_url: poster.image_url, color: poster.color, scale: (poster.scale || 1.0), font_size: (poster.font_size || 14) });
+                };
+                toolbar.appendChild(editBtn);
+
+                var delBtn = document.createElement('button');
+                delBtn.textContent = '×';
+                delBtn.title = 'Delete';
+                delBtn.style.background = '#ef4444';
+                delBtn.style.color = 'white';
+                delBtn.style.border = 'none';
+                delBtn.style.padding = '0';
+                delBtn.style.width = '24px';
+                delBtn.style.height = '24px';
+                delBtn.style.borderRadius = '50%';
+                delBtn.style.cursor = 'pointer';
+                delBtn.style.display = 'inline-flex';
+                delBtn.style.alignItems = 'center';
+                delBtn.style.justifyContent = 'center';
+                delBtn.style.fontWeight = '800';
+                delBtn.style.fontSize = '14px';
+                delBtn.onclick = function() {
+                    if (confirm('Delete this poster?')) {
+                        fetch('/delete_poster', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                            body: new URLSearchParams({ id: poster.id })
+                        }).then(resp => {
+                            if (resp.ok) location.reload();
+                            else alert('Failed to delete');
+                        });
+                    }
+                };
+                toolbar.appendChild(delBtn);
+                wrapper.appendChild(toolbar);
+            }
+            return wrapper;
+        }
+
+        function addPosterHotspot(poster) {
+            var hotId = 'poster-' + poster.id;
+            var div = makePosterContent(poster);
+            var yawRad = deg2rad(poster.yaw || 0);
+            var pitchRad = deg2rad(poster.pitch || 0);
+            var hotspot = scene.hotspotContainer().createHotspot(div, { yaw: yawRad, pitch: pitchRad });
+            // store wrapper and inner scalable content and hotspot ref
+            div.__contentDiv = div.querySelector('.poster-content');
+            // initial font size before scaling kicks in
+            div.__contentDiv.style.fontSize = ((poster.font_size || 14)) + 'px';
+            posterState[hotId] = { id: poster.id, yawRad: yawRad, pitchRad: pitchRad, scale: (poster.scale || 1.0), fontSize: (poster.font_size || 14), wrapper: div, content: div.__contentDiv, hotspot: hotspot };
+            applyScale(hotId);
+            if (isAdmin) attachDragResize(hotId);
+        }
+
+        posters.forEach(addPosterHotspot);
+
+        function addNavHotspot(nav) {
+            var el = document.createElement('div');
+            el.className = 'nav-spot';
+            el.style.touchAction = 'none';
+            var dot = document.createElement('div');
+            dot.className = 'dot';
+            dot.style.background = nav.color || '#22c55e';
+            var lbl = document.createElement('div');
+            lbl.className = 'label';
+            lbl.textContent = nav.label || ('Go to ' + nav.target_scene_id);
+            el.appendChild(dot);
+            el.appendChild(lbl);
+            // For non-admin users, simple click navigates
+            if (!isAdmin) {
+                el.addEventListener('click', function(e){
+                    e.stopPropagation();
+                    window.location.href = '/tour/' + nav.target_scene_id;
+                });
+            }
+            if (isAdmin) {
+                var tools = document.createElement('div');
+                tools.className = 'admin-tools';
+                var del = document.createElement('button');
+                del.className = 'delete';
+                del.textContent = '×';
+                del.title = 'Delete';
+                del.style.background = '#ef4444';
+                del.style.color = 'white';
+                del.style.border = 'none';
+                del.style.padding = '0';
+                del.style.width = '18px';
+                del.style.height = '18px';
+                del.style.borderRadius = '50%';
+                del.style.cursor = 'pointer';
+                del.style.display = 'inline-flex';
+                del.style.alignItems = 'center';
+                del.style.justifyContent = 'center';
+                del.style.fontWeight = '800';
+                del.style.fontSize = '12px';
+                del.onclick = function(ev){ ev.stopPropagation(); if (confirm('Delete this navigation?')) { fetch('/delete_nav', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({ id: nav.id }) }).then(r => { if (r.ok) location.reload(); else alert('Failed to delete'); }); } };
+                tools.appendChild(del);
+                el.appendChild(tools);
+            }
+            var yawRad = deg2rad(nav.yaw || 0);
+            var pitchRad = deg2rad(nav.pitch || 0);
+            var hotspot = scene.hotspotContainer().createHotspot(el, { yaw: yawRad, pitch: pitchRad });
+            var hotId = 'nav-' + nav.id;
+            navState[hotId] = { id: nav.id, wrapper: el, yawRad: yawRad, pitchRad: pitchRad, hotspot: hotspot, targetSceneId: nav.target_scene_id };
+            if (isAdmin) attachNavDrag(hotId);
+        }
+
+        navs.forEach(addNavHotspot);
+
+        // Preload scene 2 on load
+        preloadImage('/2.jpg');
+
+        // Register service worker only outside local dev
+        if ('serviceWorker' in navigator && location.hostname !== '127.0.0.1' && location.hostname !== 'localhost') {
+            navigator.serviceWorker.register('/sw.js');
+        }
+
+        if (isAdmin) {
+            var addingPoster = false;
+            var addingNav = false;
+            // Admin toolbar (top-right)
+            var adminBar = document.createElement('div');
+            adminBar.style.position = 'fixed';
+            adminBar.style.top = '20px';
+            adminBar.style.right = '20px';
+            adminBar.style.zIndex = '10000';
+            adminBar.style.display = 'flex';
+            adminBar.style.gap = '10px';
+            document.body.appendChild(adminBar);
+
+            var addButton = document.createElement('button');
+            addButton.textContent = 'Add Poster';
+            addButton.style.padding = '10px';
+            addButton.style.background = 'rgba(0,0,0,0.7)';
+            addButton.style.color = 'white';
+            addButton.style.border = 'none';
+            addButton.style.cursor = 'pointer';
+            addButton.onclick = function() {
+                addingPoster = true;
+                alert('Click on the 360 view to place the poster.');
+            };
+            adminBar.appendChild(addButton);
+
+            var addNavBtn = document.createElement('button');
+            addNavBtn.textContent = 'Add Navigation';
+            addNavBtn.style.padding = '10px';
+            addNavBtn.style.background = 'rgba(0,0,0,0.7)';
+            addNavBtn.style.color = 'white';
+            addNavBtn.style.border = 'none';
+            addNavBtn.style.cursor = 'pointer';
+            addNavBtn.onclick = function(){ addingNav = true; alert('Click on the 360 view to place a navigation button.'); };
+            adminBar.appendChild(addNavBtn);
+
+            var panoramaDiv = document.getElementById('panorama');
+            panoramaDiv.addEventListener('click', function(event) {
+                if (addingPoster) {
+                    addingPoster = false;
+                    var rect = panoEl.getBoundingClientRect();
+                    var x = event.clientX - rect.left;
+                    var y = event.clientY - rect.top;
+                    var coords = view.screenToCoordinates({ x: x, y: y });
+                    var pitch = rad2deg(coords.pitch);
+                    var yaw = rad2deg(coords.yaw);
+                    openPosterModal('create', { pitchDeg: pitch, yawDeg: yaw, text: '', image_url: '', color: '#ffffff', scale: 1.0, font_size: 14 });
+                } else if (addingNav) {
+                    addingNav = false;
+                    var rect2 = panoEl.getBoundingClientRect();
+                    var x2 = event.clientX - rect2.left;
+                    var y2 = event.clientY - rect2.top;
+                    var c2 = view.screenToCoordinates({ x: x2, y: y2 });
+                    var pitch2 = rad2deg(c2.pitch);
+                    var yaw2 = rad2deg(c2.yaw);
+                    openNavModal({ pitchDeg: pitch2, yawDeg: yaw2, label: '', color: '#22c55e' });
+                }
+            });
+        }
+
+        // Zoom-aware scaling and admin drag/resize
+        function applyScale(hotId) {
+            var st = posterState[hotId];
+            if (!st || !st.content) return;
+            var hfovDeg = view.fov() * 180 / Math.PI;
+            var baseK = 1.0; // tune if needed
+            var eff = baseK * (st.scale || 1.0) * (110 / hfovDeg);
+            // Remove transform-based scaling to avoid blurry text
+            st.content.style.transform = '';
+            st.content.style.transformOrigin = '';
+            // Dynamically size content
+            var baseWidth = 220; // px at scale=1 and hfov=110
+            var baseFont = (st.fontSize || 14);  // per-poster base
+            var width = Math.max(120, baseWidth * eff);
+            var fontPx = Math.max(10, baseFont * eff);
+            // Size the wrapper so background scales with content size
+            st.wrapper.style.width = width + 'px';
+            // Content fills wrapper; adjust font-size only for clarity
+            st.content.style.width = '100%';
+            st.content.style.fontSize = fontPx.toFixed(1) + 'px';
+        }
+
+        function rescaleAll() {
+            Object.keys(posterState).forEach(applyScale);
+        }
+        view.addEventListener('change', rescaleAll);
+
+        function attachDragResize(hotId) {
+            var st = posterState[hotId];
+            if (!st) return;
+            var isDragging = false;
+            var isResizing = false;
+            var startX = 0, startY = 0, startScale = st.scale || 1.0;
+
+            // Make the whole poster draggable
+            st.wrapper.style.cursor = 'move';
+            st.wrapper.addEventListener('mousedown', function(e) {
+                if (e.target === st.wrapper.__resizeHandle) return; // resizing takes priority
+                isDragging = true;
+                // Calculate initial offset so the poster doesn't jump
+                try {
+                    var rect0 = panoEl.getBoundingClientRect();
+                    var x0 = e.clientX - rect0.left;
+                    var y0 = e.clientY - rect0.top;
+                    var c0 = view.screenToCoordinates({ x: x0, y: y0 });
+                    if (c0) {
+                        st.dragOffsetYaw = c0.yaw - (st.yawRad || 0);
+                        st.dragOffsetPitch = c0.pitch - (st.pitchRad || 0);
+                    }
+                } catch (err) {}
+                // Disable viewer controls while dragging
+                try { viewer.controls().disable(); } catch (err) {}
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            // Touch start for dragging
+            st.wrapper.addEventListener('touchstart', function(e) {
+                if (e.target === st.wrapper.__resizeHandle) return; // resizing takes priority
+                isDragging = true;
+                // Calculate initial offset so the poster doesn't jump
+                try {
+                    var t0 = e.touches[0];
+                    if (t0) {
+                        var rect0 = panoEl.getBoundingClientRect();
+                        var x0 = t0.clientX - rect0.left;
+                        var y0 = t0.clientY - rect0.top;
+                        var c0 = view.screenToCoordinates({ x: x0, y: y0 });
+                        if (c0) {
+                            st.dragOffsetYaw = c0.yaw - (st.yawRad || 0);
+                            st.dragOffsetPitch = c0.pitch - (st.pitchRad || 0);
+                        }
+                    }
+                } catch (err) {}
+                try { viewer.controls().disable(); } catch (err) {}
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+                e.stopPropagation();
+            }, { passive: false });
+            document.addEventListener('mouseup', function() {
+                if (isDragging) {
+                    isDragging = false;
+                    // Persist updated position
+                    savePoster(hotId);
+                }
+                if (isResizing) {
+                    isResizing = false;
+                    savePoster(hotId);
+                }
+                // Re-enable viewer controls and selection after any drag/resize
+                try { viewer.controls().enable(); } catch (err) {}
+                document.body.style.userSelect = '';
+            });
+            document.addEventListener('touchend', function() {
+                if (isDragging) {
+                    isDragging = false;
+                    savePoster(hotId);
+                }
+                if (isResizing) {
+                    isResizing = false;
+                    savePoster(hotId);
+                }
+                try { viewer.controls().enable(); } catch (err) {}
+                document.body.style.userSelect = '';
+            });
+            document.addEventListener('touchcancel', function() {
+                if (isDragging || isResizing) {
+                    isDragging = false; isResizing = false;
+                    try { viewer.controls().enable(); } catch (err) {}
+                    document.body.style.userSelect = '';
+                }
+            });
+            document.addEventListener('mousemove', function(e) {
+                if (!isDragging && !isResizing) return;
+                if (isDragging) {
+                    var rect = panoEl.getBoundingClientRect();
+                    var x = e.clientX - rect.left;
+                    var y = e.clientY - rect.top;
+                    var coords = view.screenToCoordinates({ x: x, y: y });
+                    if (!coords) return;
+                    st.pitchRad = coords.pitch - (st.dragOffsetPitch || 0);
+                    st.yawRad = coords.yaw - (st.dragOffsetYaw || 0);
+                    // Move hotspot in place without recreating
+                    if (st.hotspot && st.hotspot.setPosition) {
+                        st.hotspot.setPosition({ yaw: st.yawRad, pitch: st.pitchRad });
+                    }
+                } else if (isResizing) {
+                    var dx = e.clientX - startX;
+                    var dy = e.clientY - startY;
+                    var signedDelta = (dx + dy) / 200; // right/down increases, left/up decreases
+                    st.scale = Math.max(0.2, Math.min(5.0, startScale + signedDelta));
+                    applyScale(hotId);
+                }
+            });
+            document.addEventListener('touchmove', function(e) {
+                if (!isDragging && !isResizing) return;
+                var t = e.touches[0];
+                if (!t) return;
+                if (isDragging) {
+                    var rect = panoEl.getBoundingClientRect();
+                    var x = t.clientX - rect.left;
+                    var y = t.clientY - rect.top;
+                    var coords = view.screenToCoordinates({ x: x, y: y });
+                    if (!coords) return;
+                    st.pitchRad = coords.pitch - (st.dragOffsetPitch || 0);
+                    st.yawRad = coords.yaw - (st.dragOffsetYaw || 0);
+                    if (st.hotspot && st.hotspot.setPosition) {
+                        st.hotspot.setPosition({ yaw: st.yawRad, pitch: st.pitchRad });
+                    }
+                } else if (isResizing) {
+                    var dx = t.clientX - startX;
+                    var dy = t.clientY - startY;
+                    var signedDelta = (dx + dy) / 200;
+                    st.scale = Math.max(0.2, Math.min(5.0, startScale + signedDelta));
+                    applyScale(hotId);
+                }
+                e.preventDefault(); // prevent page scroll while manipulating
+            }, { passive: false });
+
+            if (st.wrapper.__resizeHandle) {
+                st.wrapper.__resizeHandle.addEventListener('mousedown', function(e) {
+                    isResizing = true;
+                    startX = e.clientX; startY = e.clientY;
+                    startScale = st.scale || 1.0;
+                    // Disable viewer controls while resizing
+                    try { viewer.controls().disable(); } catch (err) {}
+                    document.body.style.userSelect = 'none';
+                    e.stopPropagation();
+                    e.preventDefault();
+                });
+                st.wrapper.__resizeHandle.addEventListener('touchstart', function(e) {
+                    isResizing = true;
+                    var t = e.touches[0];
+                    if (t) { startX = t.clientX; startY = t.clientY; }
+                    startScale = st.scale || 1.0;
+                    try { viewer.controls().disable(); } catch (err) {}
+                    document.body.style.userSelect = 'none';
+                    e.stopPropagation();
+                    e.preventDefault();
+                }, { passive: false });
+            }
+        }
+
+        function attachNavDrag(hotId) {
+            var st = navState[hotId];
+            if (!st) return;
+            var isDragging = false;
+            var moved = false;
+            var startX = 0, startY = 0;
+            st.wrapper.addEventListener('mousedown', function(e){
+                // Start drag unless clicking admin tools
+                if (e.target && e.target.classList && e.target.classList.contains('delete')) return;
+                isDragging = true; moved = false; startX = e.clientX; startY = e.clientY;
+                try {
+                    var rect0 = panoEl.getBoundingClientRect();
+                    var x0 = e.clientX - rect0.left;
+                    var y0 = e.clientY - rect0.top;
+                    var c0 = view.screenToCoordinates({ x: x0, y: y0 });
+                    if (c0) { st.dragOffsetYaw = c0.yaw - (st.yawRad || 0); st.dragOffsetPitch = c0.pitch - (st.pitchRad || 0); }
+                } catch(err) {}
+                try { viewer.controls().disable(); } catch(err) {}
+                document.body.style.userSelect = 'none';
+                e.preventDefault(); e.stopPropagation();
+            });
+            document.addEventListener('mousemove', function(e){
+                if (!isDragging) return;
+                var ddx = Math.abs(e.clientX - startX) + Math.abs(e.clientY - startY);
+                var rect = panoEl.getBoundingClientRect();
+                var x = e.clientX - rect.left;
+                var y = e.clientY - rect.top;
+                var coords = view.screenToCoordinates({ x: x, y: y });
+                if (!coords) return;
+                st.pitchRad = coords.pitch - (st.dragOffsetPitch || 0);
+                st.yawRad = coords.yaw - (st.dragOffsetYaw || 0);
+                if (st.hotspot && st.hotspot.setPosition) { st.hotspot.setPosition({ yaw: st.yawRad, pitch: st.pitchRad }); }
+                if (ddx > 3) moved = true;
+            });
+            document.addEventListener('mouseup', function(){
+                if (!isDragging) return;
+                isDragging = false;
+                if (moved) { saveNav(hotId); }
+                else { window.location.href = '/tour/' + st.targetSceneId; }
+                try { viewer.controls().enable(); } catch(err) {}
+                document.body.style.userSelect = '';
+            });
+            // Touch support
+            st.wrapper.addEventListener('touchstart', function(e){
+                if (e.target && e.target.classList && e.target.classList.contains('delete')) return;
+                isDragging = true; moved = false;
+                try {
+                    var t0 = e.touches[0];
+                    if (t0) {
+                        startX = t0.clientX; startY = t0.clientY;
+                        var rect0 = panoEl.getBoundingClientRect();
+                        var x0 = t0.clientX - rect0.left;
+                        var y0 = t0.clientY - rect0.top;
+                        var c0 = view.screenToCoordinates({ x: x0, y: y0 });
+                        if (c0) { st.dragOffsetYaw = c0.yaw - (st.yawRad || 0); st.dragOffsetPitch = c0.pitch - (st.pitchRad || 0); }
+                    }
+                } catch(err) {}
+                try { viewer.controls().disable(); } catch(err) {}
+                document.body.style.userSelect = 'none';
+                e.preventDefault(); e.stopPropagation();
+            }, { passive: false });
+            document.addEventListener('touchmove', function(e){
+                if (!isDragging) return;
+                var t = e.touches[0]; if (!t) return;
+                var ddx = Math.abs(t.clientX - startX) + Math.abs(t.clientY - startY);
+                var rect = panoEl.getBoundingClientRect();
+                var x = t.clientX - rect.left;
+                var y = t.clientY - rect.top;
+                var coords = view.screenToCoordinates({ x: x, y: y });
+                if (!coords) return;
+                st.pitchRad = coords.pitch - (st.dragOffsetPitch || 0);
+                st.yawRad = coords.yaw - (st.dragOffsetYaw || 0);
+                if (st.hotspot && st.hotspot.setPosition) { st.hotspot.setPosition({ yaw: st.yawRad, pitch: st.pitchRad }); }
+                if (ddx > 3) moved = true;
+                e.preventDefault();
+            }, { passive: false });
+            document.addEventListener('touchend', function(){
+                if (!isDragging) return;
+                isDragging = false;
+                if (moved) { saveNav(hotId); }
+                else { window.location.href = '/tour/' + st.targetSceneId; }
+                try { viewer.controls().enable(); } catch(err) {}
+                document.body.style.userSelect = '';
+            });
+            document.addEventListener('touchcancel', function(){
+                if (!isDragging) return;
+                isDragging = false;
+                try { viewer.controls().enable(); } catch(err) {}
+                document.body.style.userSelect = '';
+            });
+        }
+
+        function savePoster(hotId) {
+            var st = posterState[hotId];
+            if (!st) return;
+            fetch('/update_poster', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: new URLSearchParams({
+                    id: st.id,
+                    pitch: rad2deg(st.pitchRad || 0),
+                    yaw: rad2deg(st.yawRad || 0),
+                    scale: st.scale
+                })
+            });
+        }
+
+        function saveNav(hotId) {
+            var st = navState[hotId];
+            if (!st) return;
+            fetch('/update_nav', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: new URLSearchParams({
+                    id: st.id,
+                    pitch: rad2deg(st.pitchRad || 0),
+                    yaw: rad2deg(st.yawRad || 0)
+                })
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+
+
+# I need you to change this project with the following guidelines :
+
+so we have the folllwing stuff : 
+the actual map
+POIs (points refering to the 360 images and the important building in lifjell art museum)
+then we can go to tour within the 360 images using a button on the popup box when clicking
+on the point of interest. 
+then in the 360 images there can be posters created by the admin users
+These aestethic posters by the admin posters should be like posters on the wall of university\
+with different colors which could include images and texts. 
+now only admins should be able to add texts 
+and also the 360 image view should have the following feature : 
+Panellum supports WebVR and WebXR for immersive viewing through compatible headsets. You enable it by setting "hfov": 110 and "autoLoad": true in the viewer config, and by including "showFullscreenCtrl": true and "showVRButton": true. The VR mode activates via the headset icon once the panorama is loaded in a browser that supports WebXR (like Chromium-based ones).
+this can make watching this website with VR interesting. 

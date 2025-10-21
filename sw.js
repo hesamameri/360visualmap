@@ -1,7 +1,8 @@
-const CACHE_NAME = 'journey-v1';
+const CACHE_NAME = 'journey-v3';
 const urlsToCache = [
   '/',
-  '/static/style.css',
+  '/map',
+  '/login',
   '/1.jpg',
   '/2.jpg',
   '/3.jpg',
